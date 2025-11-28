@@ -130,7 +130,7 @@ def home():
             day_total = 0
             for ing in ingredients_list:
                 day_total += ing[2]  # What goes here?
-    
+            print ('x')
             # Add to week total
             week_total += day_total
             
