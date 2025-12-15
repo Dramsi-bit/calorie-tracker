@@ -13,6 +13,25 @@ def init_db():
             date TEXT DEFAULT (date('now'))
         )
     ''')
+
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recipes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL
+        )
+    ''')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS recipe_ingredients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipe_id INTEGER NOT NULL,
+        ingredient_name TEXT NOT NULL,
+        weight TEXT NOT NULL,
+        calories INTEGER NOT NULL,
+        FOREIGN KEY(recipe_id) REFERENCES recipes(id)
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -45,6 +64,42 @@ def delete_ingredient(ingredient_id):
     conn.commit()
     conn.close()
 
+def add_recipe(name):
+    conn = sqlite3.connect("calorie_tracker.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO recipes(name) VALUES(?)" , (name,))
+    conn.commit()
+    conn.close()
+
+def get_all_recipes():
+    conn = sqlite3.connect('calorie_tracker.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM recipes")
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def delete_recipe(recipe_id):
+    conn = sqlite3.connect("calorie_tracker.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
+    conn.commit()
+    conn.close()
+
+def add_recipe_ingredient(recipe_id, ingredient_name,weight,calories):
+    conn = sqlite3.connect('calorie_tracker.db')
+    cursor = conn.cursor()
+    cursor.execute("INSERT into recipe_ingredients(recipe_id,ingredient_name,weight,calories) VALUES (?,?,?,?)" , (recipe_id,ingredient_name,weight,calories))
+    conn.commit()
+    conn.close()
+
+def get_recipe_ingredients(recipe_id):
+    conn = sqlite3.connect("calorie_tracker.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
+    results = cursor.fetchall()
+    conn.close()
+    return results
 # Initialize database
 init_db()
 
@@ -55,6 +110,78 @@ def home():
     error = ""
     success = ""
     today = date.today()
+    recipes = get_all_recipes()
+
+    recipes_html = ""
+    for recipe in recipes:
+        recipes_html += f"""
+            <div class="ingredient-item">
+                <span class="ingredient-name">{recipe[1]}</span>
+                <div>
+                    <a href="/?editing={recipe[0]}" style="display: inline;">
+                        <button type="button">Add Ingredients</button>
+                    </a>
+                    
+                    <a href="/?viewing={recipe[0]}" style="display: inline;">
+                        <button type="button" class="view_recipe-btn">View Recipe</button>
+                    </a>
+                    <p>
+                    <form method="POST" action="/" style="display: inline;">
+                        <input type="hidden" name="delete_recipe_id" value="{recipe[0]}">
+                        <button type="submit" class="delete-btn">Delete</button>
+                    </form>
+                    </p>
+                </div>
+            </div>
+        """
+    editing_recipe_id = request.args.get('editing')
+    
+    if editing_recipe_id:
+        ingredient_input = f""" 
+                    <h2>Add the ingredients for the recipe:</h2>
+
+                    <form method="POST" action="/">
+                        <label>Ingredient:</label>
+                        <input type="text" name="recipe_ingredient_name">
+                        <br><br>
+                        <label>Weight in (grams):</label>
+                        <input type = "text" name = ingredient_name_weight>
+                        <br><br>
+                        <label>Calories:</label>
+                        <input type = "text" name = ingredient_name_calories>
+                        <br><br>
+                        <input type="submit" name="add_recipe_ingredient" value="Add to Recipe">
+                        <input type="hidden" name="recipe_id" value="{editing_recipe_id}">
+                    </form>
+                    
+                """
+    else:
+        ingredient_input = ""
+    
+    viewing_recipe_id = request.args.get('viewing')
+    if viewing_recipe_id:
+        recipe_ingredients = get_recipe_ingredients(viewing_recipe_id)
+        # Now build HTML to display them
+        recipe_ingredients_html = ""
+        for ing in recipe_ingredients:
+            recipe_ingredients_html += f""" 
+            <div class = "ingredient-item">
+                <span class = "ingredient-name"> {ing[2]} </span>
+                <div>
+                    <span class = "ingredient-weight"> {ing[3]} grams </span>
+                    <span class = "ingredient-calories"> {ing[4]} cals</span>
+                </div>
+
+            </div>
+
+                
+                                       
+        """
+    else:
+        recipe_ingredients = []
+        recipe_ingredients_html = ""
+
+    
 
 
     dates = []
@@ -87,6 +214,30 @@ def home():
             ingredient_id = request.form["delete_id"]
             delete_ingredient(ingredient_id)
             return redirect("/")
+        
+        elif "delete_recipe_id" in request.form:
+            recipe_id = request.form["delete_recipe_id"]
+            delete_recipe(recipe_id)
+            return redirect("/")
+        
+        elif "recipe_action" in request.form:
+            recipe_name = request.form["recipe_name"]
+            add_recipe(recipe_name)
+            print("Recipe added:", recipe_name)
+            return redirect("/")
+        
+        elif "add_recipe_ingredient" in request.form:
+            # Get the form data
+            recipe_id = request.form["recipe_id"]
+            ingredient_name = request.form["recipe_ingredient_name"]  # What's the field name?
+            weight = request.form["ingredient_name_weight"]
+            calories = request.form["ingredient_name_calories"]
+    
+            # TODO: Insert into recipe_ingredients table
+            add_recipe_ingredient(recipe_id,ingredient_name,weight,calories)
+            # TODO: Redirect back
+            return redirect(f"/?editing={recipe_id}")
+            
         else:
             ingredient = request.form["ingredient_name"]
             calories = request.form["calories"]
@@ -218,6 +369,13 @@ def home():
             background-color: #e74c3c;  /* Normal: bright red */
         }}
 
+        .view_recipe-btn {{
+            background-color: #90EE90;  /* Normal: darker green */
+        }}
+
+        .view_recipe-btn:hover {{
+            background-color: #006400;  /* Normal: darker green */
+        }}
         .delete-btn:hover {{
             background-color: #c0392b;  /* Hover: darker red */
         }}
@@ -288,6 +446,15 @@ def home():
         <input type="submit" value="Add Ingredient">
     </form>
     <br>
+
+    <h2>Create New Recipe:</h2>
+    <form method="POST" action="/">
+        <label>Recipe Name:</label>
+        <input type="text" name="recipe_name">
+        <br><br>
+        <input type="submit" name="recipe_action" value="Create Recipe">
+    </form>
+    <br>
     <form method="POST" action="/">
         <input type="submit" name="action" value="Clear All">
     </form>
@@ -301,6 +468,16 @@ def home():
 
     <h2>Total:</h2>
     {total_calories} calories
+    <br>
+    <h2>My Recipes:</h2>
+    {recipes_html}
+    <br>
+    <h2>Ingredient input:</h2>
+    {ingredient_input}
+    <br>
+    <h2>Recipe Ingredients:</h2>
+    {recipe_ingredients_html}
+
 </body>
 </html>"""
 
