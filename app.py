@@ -85,7 +85,7 @@ def delete_recipe(recipe_id):
     cursor.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
     conn.commit()
     conn.close()
-
+ 
 def add_recipe_ingredient(recipe_id, ingredient_name,weight,calories):
     conn = sqlite3.connect('calorie_tracker.db')
     cursor = conn.cursor()
@@ -100,6 +100,16 @@ def get_recipe_ingredients(recipe_id):
     results = cursor.fetchall()
     conn.close()
     return results
+
+def get_recipe_by_id(recipe_id):
+    conn = sqlite3.connect("calorie_tracker.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM recipes WHERE id = ?", (recipe_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result
+
+    
 # Initialize database
 init_db()
 
@@ -125,12 +135,16 @@ def home():
                     <a href="/?viewing={recipe[0]}" style="display: inline;">
                         <button type="button" class="view_recipe-btn">View Recipe</button>
                     </a>
+                    
                     <p>
                     <form method="POST" action="/" style="display: inline;">
                         <input type="hidden" name="delete_recipe_id" value="{recipe[0]}">
                         <button type="submit" class="delete-btn">Delete</button>
                     </form>
                     </p>
+                    <a href="/?logging={recipe[0]}" style="display: inline;">
+                        <button type="button" class="log_recipe-btn">Log Recipe</button>
+                    </a>
                 </div>
             </div>
         """
@@ -177,11 +191,31 @@ def home():
                 
                                        
         """
+            
+    
     else:
         recipe_ingredients = []
         recipe_ingredients_html = ""
 
-    
+    logging_recipe_id = request.args.get('logging')
+    if logging_recipe_id:
+        # Step 1: Get recipe name
+        recipe = get_recipe_by_id(logging_recipe_id)
+        recipe_name = recipe[1]
+        
+        # Step 2: Get recipe ingredients
+        recipe_ingreds = get_recipe_ingredients(logging_recipe_id)
+        
+        # Step 3: Calculate total calories
+        total_cals = 0
+        for ing in recipe_ingreds:
+            total_cals += ing[4]  # What index has calories?
+        
+        # Step 4: Save to ingredients table
+        add_ingredient(recipe_name, total_cals, str(today))  # What parameters?
+        
+        # Step 5: Redirect
+        return redirect (f"/?test={str(today)}" )# Where to?
 
 
     dates = []
@@ -371,6 +405,9 @@ def home():
 
         .view_recipe-btn {{
             background-color: #90EE90;  /* Normal: darker green */
+        }}
+        .log_recipe-btn{{
+            background-color: #000000;  /* Normal: black */
         }}
 
         .view_recipe-btn:hover {{
